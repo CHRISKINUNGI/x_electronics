@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "SLE-.#####",
+ "creation": "2026-03-13 16:40:28.423920",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item",
+  "warehouse",
+  "qty",
+  "incoming_rate",
+  "valuation_rate",
+  "balance_qty",
+  "posting_date",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "label": "Qty",
+   "reqd": 1
+  },
+  {
+   "fieldname": "incoming_rate",
+   "fieldtype": "Currency",
+   "label": "Incoming Rate"
+  },
+  {
+   "fieldname": "valuation_rate",
+   "fieldtype": "Currency",
+   "label": "Valuation Rate"
+  },
+  {
+   "fieldname": "balance_qty",
+   "fieldtype": "Float",
+   "label": "Balance Qty"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posting Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Stock Ledger Entry",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-03-13 17:34:02.639593",
+ "modified_by": "Administrator",
+ "module": "X Electronics",
+ "name": "Stock Ledger Entry",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
