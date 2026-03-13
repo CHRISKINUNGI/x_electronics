@@ -1,22 +1,26 @@
-# Copyright (c) 2026, Chris and Contributors
-# See license.txt
-
-# import frappe
-from frappe.tests import IntegrationTestCase
+import frappe
+from frappe.tests.utils import FrappeTestCase
 
 
-# On IntegrationTestCase, the doctype test records and all
-# link-field test record dependencies are recursively loaded
-# Use these module variables to add/remove to/from that list
-EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
-IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
+class TestWarehouse(FrappeTestCase):
+	def test_warehouse_tree(self):
+		# Create a Parent Warehouse
+		if not frappe.db.exists("Warehouse", "Parent WH"):
+			parent = frappe.get_doc(
+				{"doctype": "Warehouse", "warehouse_name": "Parent WH", "is_group": 1}
+			).insert()
 
+		# Create a Child Warehouse
+		child_name = "Child WH"
+		if not frappe.db.exists("Warehouse", child_name):
+			child = frappe.get_doc(
+				{
+					"doctype": "Warehouse",
+					"warehouse_name": child_name,
+					"is_group": 0,
+					"parent_warehouse": "Parent WH",
+				}
+			).insert()
 
-
-class IntegrationTestWarehouse(IntegrationTestCase):
-	"""
-	Integration tests for Warehouse.
-	Use this class for testing interactions between multiple components.
-	"""
-
-	pass
+		# Assert the child correctly points to the parent
+		self.assertEqual(frappe.db.get_value("Warehouse", child_name, "parent_warehouse"), "Parent WH")

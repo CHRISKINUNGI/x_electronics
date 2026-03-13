@@ -1,22 +1,24 @@
 # Copyright (c) 2026, Chris and Contributors
 # See license.txt
 
-# import frappe
-from frappe.tests import IntegrationTestCase
+import frappe
+from frappe.tests.utils import FrappeTestCase
 
 
-# On IntegrationTestCase, the doctype test records and all
-# link-field test record dependencies are recursively loaded
-# Use these module variables to add/remove to/from that list
-EXTRA_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
-IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
+class TestItem(FrappeTestCase):
+	def test_item_creation(self):
+		# Test if item inserts correctly
+		item_code = "LAPTOP-001"
+		if frappe.db.exists("Item", item_code):
+			frappe.delete_doc("Item", item_code)
 
+		item = frappe.get_doc(
+			{
+				"doctype": "Item",
+				"item_code": item_code,
+				"item_name": "Gaming Laptop",
+				"unit_of_measure": "Nos",
+			}
+		).insert()
 
-
-class IntegrationTestItem(IntegrationTestCase):
-	"""
-	Integration tests for Item.
-	Use this class for testing interactions between multiple components.
-	"""
-
-	pass
+		self.assertEqual(item.name, item_code)
