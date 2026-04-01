@@ -52,3 +52,45 @@ class TestStockBalanceReport(FrappeTestCase):
 		self.assertEqual(row.balance_qty, 15)
 		self.assertAlmostEqual(row.valuation_rate, 150)
 		self.assertAlmostEqual(row.total_value, 2250)
+
+	def test_warehouse_hierarchy_filter(self):
+		"""Filtering by a group warehouse should include child warehouse data."""
+		suffix = uuid4().hex[:8].upper()
+		group_warehouse = f"Group WH {suffix}"
+		child_warehouse = f"Child WH {suffix}"
+
+		frappe.get_doc(
+			{"doctype": "Warehouse", "warehouse_name": group_warehouse, "is_group": 1}
+		).insert()
+		child = frappe.get_doc(
+			{"doctype": "Warehouse", "warehouse_name": child_warehouse, "parent_warehouse": group_warehouse}
+		).insert()
+
+		item_code = f"TEST-HIER-{suffix}"
+		frappe.get_doc(
+			{
+				"doctype": "Item",
+				"item_code": item_code,
+				"item_name": f"Hierarchy Item {suffix}",
+				"unit_of_measure": "Nos",
+			}
+		).insert()
+
+		sle = frappe.get_doc(
+			{
+				"doctype": "Stock Ledger Entry",
+				"item": item_code,
+				"warehouse": child.name,
+				"qty": 20,
+				"incoming_rate": 300,
+				"posting_date": frappe.utils.today(),
+			}
+		)
+		sle.insert()
+		sle.submit()
+
+		# Filter by group — should include child warehouse stock
+		_, data = execute({"warehouse": group_warehouse, "to_date": frappe.utils.today()})
+		row = next((d for d in data if d.item == item_code), None)
+		self.assertIsNotNone(row)
+		self.assertEqual(row.balance_qty, 20)

@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import flt
 
 
 class TestStockEntry(FrappeTestCase):
@@ -175,3 +176,119 @@ class TestStockEntry(FrappeTestCase):
 		)
 		with self.assertRaises(frappe.ValidationError):
 			ste.insert()
+
+	def test_cancel_reverses_ledger_entries(self):
+		"""Cancelling a Stock Entry should cancel its ledger entries and free up stock."""
+		ste = frappe.get_doc(
+			{
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Receipt",
+				"posting_date": frappe.utils.today(),
+				"items": [
+					{
+						"item": self.item_code,
+						"quantity": 25,
+						"basic_rate": 400,
+						"target_warehouse": self.source_warehouse,
+					}
+				],
+			}
+		)
+		ste.insert()
+		ste.submit()
+
+		# Verify ledger entry exists
+		sle_count = frappe.db.count(
+			"Stock Ledger Entry",
+			{"voucher_no": ste.name, "docstatus": 1},
+		)
+		self.assertEqual(sle_count, 1)
+
+		# Cancel
+		ste.cancel()
+
+		# Ledger entries should now be cancelled
+		active_sles = frappe.db.count(
+			"Stock Ledger Entry",
+			{"voucher_no": ste.name, "docstatus": 1},
+		)
+		self.assertEqual(active_sles, 0)
+
+		cancelled_sles = frappe.db.count(
+			"Stock Ledger Entry",
+			{"voucher_no": ste.name, "docstatus": 2},
+		)
+		self.assertEqual(cancelled_sles, 1)
+
+	def test_full_receipt_consume_transfer_flow(self):
+		"""Integration test: Receipt -> Transfer -> Consume across warehouses."""
+		frappe.get_doc({"doctype": "Warehouse", "warehouse_name": self.target_warehouse}).insert()
+
+		# 1. Receipt into source warehouse
+		frappe.get_doc(
+			{
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Receipt",
+				"posting_date": frappe.utils.today(),
+				"items": [
+					{
+						"item": self.item_code,
+						"quantity": 100,
+						"basic_rate": 500,
+						"target_warehouse": self.source_warehouse,
+					}
+				],
+			}
+		).insert().submit()
+
+		# 2. Transfer 40 units to target warehouse
+		frappe.get_doc(
+			{
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Transfer",
+				"posting_date": frappe.utils.today(),
+				"items": [
+					{
+						"item": self.item_code,
+						"quantity": 40,
+						"source_warehouse": self.source_warehouse,
+						"target_warehouse": self.target_warehouse,
+					}
+				],
+			}
+		).insert().submit()
+
+		# 3. Consume 10 from target warehouse
+		frappe.get_doc(
+			{
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Consume",
+				"posting_date": frappe.utils.today(),
+				"items": [
+					{
+						"item": self.item_code,
+						"quantity": 10,
+						"source_warehouse": self.target_warehouse,
+					}
+				],
+			}
+		).insert().submit()
+
+		# Verify final balances via ledger
+		source_balance = flt(
+			frappe.db.sql(
+				"""SELECT COALESCE(SUM(qty), 0) FROM `tabStock Ledger Entry`
+				WHERE item = %s AND warehouse = %s AND docstatus = 1""",
+				(self.item_code, self.source_warehouse),
+			)[0][0]
+		)
+		target_balance = flt(
+			frappe.db.sql(
+				"""SELECT COALESCE(SUM(qty), 0) FROM `tabStock Ledger Entry`
+				WHERE item = %s AND warehouse = %s AND docstatus = 1""",
+				(self.item_code, self.target_warehouse),
+			)[0][0]
+		)
+
+		self.assertEqual(source_balance, 60)  # 100 - 40
+		self.assertEqual(target_balance, 30)  # 40 - 10
