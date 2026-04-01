@@ -2,11 +2,14 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt
 
+from x_electronics.x_electronics.utils import get_row_warehouses
+
 
 class StockEntry(Document):
 	def validate(self):
 		self.validate_rows()
 		self.validate_stock_availability()
+		self.calculate_totals()
 
 	def validate_rows(self):
 		if self.stock_entry_type not in {"Receipt", "Consume", "Transfer"}:
@@ -18,8 +21,7 @@ class StockEntry(Document):
 		for row in self.items:
 			qty = flt(row.get("quantity"))
 			rate = flt(row.get("basic_rate"))
-			source_warehouse = row.get("source_warehouse") or row.get("s_warehouse")
-			target_warehouse = row.get("target_warehouse") or row.get("t_warehouse")
+			source_warehouse, target_warehouse = get_row_warehouses(row)
 
 			if qty <= 0:
 				frappe.throw("Quantity must be greater than zero.")
@@ -39,6 +41,10 @@ class StockEntry(Document):
 				if source_warehouse == target_warehouse:
 					frappe.throw("Source and target warehouse cannot be the same for Transfer.")
 
+	def calculate_totals(self):
+		self.total_quantity = sum(flt(row.quantity) for row in self.items)
+		self.total_amount = sum(flt(row.quantity) * flt(row.basic_rate) for row in self.items)
+
 	def validate_stock_availability(self):
 		# Aggregate required outgoing qty per (item, source warehouse) to validate in one pass.
 		outgoing_requirements = {}
@@ -46,7 +52,7 @@ class StockEntry(Document):
 			if self.stock_entry_type not in {"Consume", "Transfer"}:
 				continue
 
-			source_warehouse = row.get("source_warehouse") or row.get("s_warehouse")
+			source_warehouse, _ = get_row_warehouses(row)
 			if not source_warehouse:
 				continue
 
@@ -70,13 +76,26 @@ class StockEntry(Document):
 					f"Requested: {required_qty}, Available: {available_qty}"
 				)
 
+	def on_cancel(self):
+		self.cancel_ledger_entries()
+
+	def cancel_ledger_entries(self):
+		"""Cancel all Stock Ledger Entries created by this Stock Entry."""
+		ledger_entries = frappe.get_all(
+			"Stock Ledger Entry",
+			filters={"voucher_no": self.name, "docstatus": 1},
+			pluck="name",
+		)
+		for sle_name in ledger_entries:
+			sle = frappe.get_doc("Stock Ledger Entry", sle_name)
+			sle.cancel()
+
 	def on_submit(self):
 		# Create immutable Stock Ledger rows according to entry type semantics.
 		for row in self.items:
 			qty = flt(row.get("quantity"))
 			rate = flt(row.get("basic_rate"))
-			source_warehouse = row.get("source_warehouse") or row.get("s_warehouse")
-			target_warehouse = row.get("target_warehouse") or row.get("t_warehouse")
+			source_warehouse, target_warehouse = get_row_warehouses(row)
 
 			# 1. Receipt: Stock comes IN to the Target Warehouse (+)
 			if self.stock_entry_type == "Receipt":
@@ -96,7 +115,6 @@ class StockEntry(Document):
 		if not warehouse:
 			frappe.throw("Warehouse is required for this transaction.")
 
-		# Create the raw, stateless Stock Ledger Entry
 		sle = frappe.get_doc(
 			{
 				"doctype": "Stock Ledger Entry",
@@ -105,6 +123,7 @@ class StockEntry(Document):
 				"incoming_rate": rate or 0,
 				"warehouse": warehouse,
 				"posting_date": self.posting_date,
+				"voucher_no": self.name,
 			}
 		)
 		sle.insert()
