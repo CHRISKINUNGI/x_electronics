@@ -6,16 +6,27 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "details_section",
   "item",
   "warehouse",
+  "column_break_details",
+  "posting_date",
   "qty",
   "incoming_rate",
+  "reference_section",
+  "voucher_no",
+  "valuation_section",
   "valuation_rate",
+  "column_break_valuation",
   "balance_qty",
-  "posting_date",
   "amended_from"
  ],
  "fields": [
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
   {
    "fieldname": "item",
    "fieldtype": "Link",
@@ -27,36 +38,67 @@
   {
    "fieldname": "warehouse",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Warehouse",
    "options": "Warehouse",
    "reqd": 1
   },
   {
+   "fieldname": "column_break_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Posting Date",
+   "reqd": 1
+  },
+  {
    "fieldname": "qty",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Qty",
    "reqd": 1
   },
   {
    "fieldname": "incoming_rate",
    "fieldtype": "Currency",
+   "in_list_view": 1,
    "label": "Incoming Rate"
+  },
+  {
+   "fieldname": "reference_section",
+   "fieldtype": "Section Break",
+   "label": "Reference"
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Link",
+   "label": "Voucher No",
+   "options": "Stock Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "valuation_section",
+   "fieldtype": "Section Break",
+   "label": "Valuation"
   },
   {
    "fieldname": "valuation_rate",
    "fieldtype": "Currency",
-   "label": "Valuation Rate"
+   "label": "Valuation Rate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_valuation",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "balance_qty",
    "fieldtype": "Float",
-   "label": "Balance Qty"
-  },
-  {
-   "fieldname": "posting_date",
-   "fieldtype": "Date",
-   "label": "Posting Date",
-   "reqd": 1
+   "label": "Balance Qty",
+   "read_only": 1
   },
   {
    "fieldname": "amended_from",
@@ -91,6 +133,11 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager"
   }
  ],
  "row_format": "Dynamic",

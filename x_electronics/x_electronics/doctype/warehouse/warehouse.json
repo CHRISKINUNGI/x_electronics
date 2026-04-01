@@ -6,18 +6,45 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "section_break_y1wz",
+  "details_section",
+  "warehouse_name",
+  "is_group",
+  "column_break_details",
+  "parent_warehouse",
   "lft",
   "rgt",
-  "is_group",
-  "old_parent",
-  "parent_warehouse",
-  "warehouse_name"
+  "old_parent"
  ],
  "fields": [
   {
-   "fieldname": "section_break_y1wz",
-   "fieldtype": "Section Break"
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "warehouse_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Warehouse Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_group",
+   "fieldtype": "Check",
+   "label": "Is Group"
+  },
+  {
+   "fieldname": "column_break_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "parent_warehouse",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Parent Warehouse",
+   "options": "Warehouse"
   },
   {
    "fieldname": "lft",
@@ -36,32 +63,11 @@
    "read_only": 1
   },
   {
-   "default": "0",
-   "fieldname": "is_group",
-   "fieldtype": "Check",
-   "label": "Is Group"
-  },
-  {
    "fieldname": "old_parent",
    "fieldtype": "Link",
    "hidden": 1,
    "label": "Old Parent",
    "options": "Warehouse"
-  },
-  {
-   "fieldname": "parent_warehouse",
-   "fieldtype": "Link",
-   "ignore_user_permissions": 1,
-   "label": "Parent Warehouse",
-   "options": "Warehouse"
-  },
-  {
-   "fieldname": "warehouse_name",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Warehouse Name",
-   "reqd": 1,
-   "unique": 1
   }
  ],
  "grid_page_length": 50,
@@ -85,6 +91,18 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
    "share": 1,
    "write": 1
   }
