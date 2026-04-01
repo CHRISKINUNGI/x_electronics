@@ -1,92 +1,186 @@
-# X Electronics
+# X Electronics - Warehouse Management System
 
-Warehouse Management System For X Electronics
+A Frappe Framework application that implements a complete warehouse management system for X Electronics with hierarchical warehouse management, stateless moving average valuation, and full test coverage.
 
-This application was developed as a technical assessment for **Navari Limited**. It implements a robust inventory tracking system with hierarchical location management, automated financial valuation, and full test coverage.
+Built as a technical assessment for **Navari Limited**.
 
-### DocTypes
+## Screenshots
+
+### Workspace
+![Landing Screen](screenshots/Landing%20Screen.png)
+
+### Item
+| List View | Add Item |
+|---|---|
+| ![Item List](screenshots/Items%20List%20Screen.png) | ![Add Item](screenshots/Add%20Item%20Screen.png) |
+
+### Warehouse
+| List View | New Warehouse |
+|---|---|
+| ![Warehouse List](screenshots/Warehouse%20List%20Screen.png) | ![New Warehouse](screenshots/New%20Warehouse%20Screen.png) |
+
+### Stock Entry
+| List View | New Stock Entry |
+|---|---|
+| ![Stock Entry List](screenshots/Stock%20Entry%20List%20Screen.png) | ![New Stock Entry](screenshots/New%20Stock%20Entry%20Screen.png) |
+
+### Reports
+| Stock Balance | Stock Ledger |
+|---|---|
+| ![Stock Balance](screenshots/Stock%20Balance%20Report%20Screen.png) | ![Stock Ledger](screenshots/Stock%20Ledger%20Report%20Screen.png) |
+
+## DocTypes
 
 | DocType | Description |
 |---|---|
-| **Item** | Product master — stores `item_code`, `item_name`, `unit_of_measure`, and a running `valuation_rate` updated on each stock movement. |
-| **Warehouse** | Nested-Set tree structure supporting Group (organisational node) and Leaf (physical location) warehouses. |
-| **Stock Ledger Entry** | Stateless, immutable ledger row — records every stock movement (quantity, rate, warehouse, date) and computes a per-row running `balance_qty` and moving-average `valuation_rate` on submit. |
-| **Stock Entry** | User-facing transaction document (Receipt / Consume / Transfer) that creates the corresponding `Stock Ledger Entry` rows on submit. |
+| **Item** | Product master with `item_code`, `item_name`, `unit_of_measure`, and an auto-computed `valuation_rate`. |
+| **Warehouse** | Nested-Set tree DocType supporting Group (organisational) and Leaf (physical) warehouses. |
+| **Stock Entry** | User-facing transaction document — Receipt, Consume, or Transfer — that creates Stock Ledger Entry rows on submit. |
+| **Stock Entry Detail** | Child table for Stock Entry line items (item, quantity, rate, warehouses). |
+| **Stock Ledger Entry** | Immutable ledger row recording every stock movement with computed `balance_qty` and moving-average `valuation_rate`. |
 
-### Key Features
+## Key Features
 
-**1. Hierarchical Warehouse Management**
-`Warehouse` is implemented as a Frappe Nested-Set (tree) DocType:
-* **Group Warehouses** — organisational nodes (e.g., "All Warehouses").
-* **Leaf Warehouses** — physical locations where transactions occur (e.g., "Nairobi Store").
-* **Tree-aware reports** — both reports accept a group warehouse filter and automatically include all descendant warehouses using `lft`/`rgt` bounds.
+### 1. Hierarchical Warehouse Management
 
-**2. Stateless Moving Average Valuation**
-Valuation is derived entirely from the ledger on each submit — no persistent running total is maintained outside the rows themselves:
-* Each `Stock Ledger Entry` computes `valuation_rate` and `balance_qty` via a single aggregate SQL query against already-submitted rows for the same item/warehouse.
-* Row-level `FOR UPDATE` locks on the `Item` and the affected SLE rows prevent concurrent valuations from producing inconsistent results.
-* The `valuation_rate` on the **Item** master is updated immediately after each commit.
+`Warehouse` uses Frappe's Nested-Set tree structure:
 
-**3. Business-Rule Validation & Security**
-Input is validated before any ledger rows are written:
-* Quantity must be > 0; rate cannot be negative.
-* Required warehouse fields are enforced per entry type.
-* Source and target warehouse cannot be identical on a Transfer.
-* Consume and Transfer are rejected when available stock is insufficient (no negative stock).
+- **Group Warehouses** — organisational nodes (e.g., "All Warehouses", "Nairobi Warehouse")
+- **Leaf Warehouses** — physical locations where stock is held (e.g., "Nairobi - Main Store")
+- **Tree-aware reports** — selecting a group warehouse automatically includes all descendants using `lft`/`rgt` bounds
 
-**4. Reports**
+### 2. Stateless Moving Average Valuation
+
+Valuation is derived entirely from the ledger — no cached running totals:
+
+- Each `Stock Ledger Entry` computes `valuation_rate` and `balance_qty` via a single aggregate SQL query against already-submitted rows
+- Row-level `SELECT ... FOR UPDATE` locks prevent concurrent submits from producing inconsistent valuations
+- The `valuation_rate` on the Item master is updated after each ledger commit
+
+**Example:**
+| Action | Balance Qty | Valuation Rate |
+|---|---|---|
+| Receive 10 @ 85,000 | 10 | 85,000.00 |
+| Receive 5 @ 87,000 | 15 | 85,666.67 |
+| Issue 3 | 12 | 85,666.67 (unchanged) |
+
+### 3. Three Transaction Types
+
+| Type | Source Warehouse | Target Warehouse | Effect |
+|---|---|---|---|
+| **Receipt** | Not applicable | Required | +qty into target |
+| **Consume** | Required | Not applicable | -qty from source |
+| **Transfer** | Required | Required | -qty from source, +qty into target |
+
+The form dynamically shows/hides warehouse columns based on the selected type.
+
+### 4. Business-Rule Validation
+
+- Quantity must be greater than zero
+- Rate cannot be negative
+- Source and target warehouse cannot be the same (Transfer)
+- Negative stock is prevented — Consume/Transfer rejected when insufficient stock
+- Warehouse selection is restricted to leaf warehouses only
+
+### 5. Cancellation Support
+
+Stock Entries can be cancelled, which automatically cancels all linked Stock Ledger Entries. Each SLE stores a `voucher_no` reference back to the originating Stock Entry for traceability.
+
+### 6. Reports
 
 | Report | Description |
 |---|---|
-| **Stock Ledger** | Line-by-line movement log per item/warehouse. Supports `from_date`, `to_date`, and `warehouse` (tree-aware) filters. Shows running `balance_qty` and `valuation_rate` per row. |
-| **Stock Balance** | Aggregated balance snapshot. Supports `to_date` and `warehouse` (tree-aware) filters. Shows Balance Qty, Valuation Rate, and Total Stock Value per item+warehouse pair. |
+| **Stock Balance** | Aggregated balance snapshot per item/warehouse. Filters: `to_date`, `item`, `warehouse` (tree-aware). Shows Balance Qty, Valuation Rate, and Total Value with a totals row. |
+| **Stock Ledger** | Line-by-line movement log. Filters: `from_date`, `to_date`, `item`, `warehouse` (tree-aware). Positive quantities shown in green, negative in red. |
 
-**5. Test Coverage**
+Both reports use shared utilities from `utils.py` — `build_stock_conditions()` for common SQL filter logic and `get_warehouse_filter()` for tree-aware warehouse expansion.
 
-All non-report functionality is covered by unit tests. Reports also have data-backed unit tests:
+### 7. Smart UX
 
-| Test class | What it covers |
+- **Dynamic form** — Stock Entry shows only relevant warehouse columns per entry type
+- **Auto-fetch rate** — selecting an item auto-populates the basic rate from the item's current valuation
+- **Calculated fields** — amount (qty x rate), total quantity, and total amount computed automatically
+- **Color-coded list view** — Receipt (green), Consume (red), Transfer (blue)
+- **Report buttons** — Item and Warehouse forms have buttons to jump to filtered reports
+- **Workspace** — central landing page with shortcuts, cards, and sidebar navigation
+- **Drill-down** — clicking a row in Stock Balance navigates to the Stock Ledger filtered for that item/warehouse
+
+## Test Coverage
+
+All non-report functionality is covered by unit tests. Reports also have data-backed tests.
+
+```
+$ bench --site mysite.localhost run-tests --app x_electronics
+
+ ✔ test_item_creation
+ ✔ test_warehouse_tree
+ ✔ test_receipt_creates_ledger_entry
+ ✔ test_consume_creates_negative_ledger_entry
+ ✔ test_transfer_creates_two_ledger_entries
+ ✔ test_consume_without_available_stock_is_blocked
+ ✔ test_non_positive_quantity_is_blocked
+ ✔ test_cancel_reverses_ledger_entries
+ ✔ test_full_receipt_consume_transfer_flow
+ ✔ test_moving_average_and_balance
+ ✔ test_direct_negative_stock_submission_is_blocked
+ ✔ test_report_returns_movement_rows
+ ✔ test_date_range_filter
+ ✔ test_report_calculation
+ ✔ test_warehouse_hierarchy_filter
+
+Ran 15 tests in 1.0s — OK
+```
+
+| Test Class | What It Covers |
 |---|---|
 | `TestItem` | Item creation and field validation |
 | `TestWarehouse` | Tree parent-child relationship |
-| `TestStockEntry` | Receipt / Consume / Transfer ledger creation; underflow rejection; invalid quantity rejection |
+| `TestStockEntry` | Receipt / Consume / Transfer ledger creation; cancellation reversal; underflow rejection; invalid quantity rejection; end-to-end flow |
 | `TestStockLedgerEntry` | Moving-average calculation; running balance; negative-stock rejection |
-| `TestStockBalanceReport` | Column schema; computed balance qty, valuation rate, and total value |
-| `TestStockLedgerReport` | Column schema; correct movement rows returned |
+| `TestStockBalanceReport` | Computed balance qty, valuation rate, total value; warehouse hierarchy filter |
+| `TestStockLedgerReport` | Movement rows returned; date range filter |
 
-### Installation
+## Project Structure
 
-You can install this app using the [bench](https://github.com/frappe/bench) CLI:
+```
+x_electronics/
+├── x_electronics/
+│   ├── doctype/
+│   │   ├── item/                    # Product master
+│   │   ├── warehouse/               # Tree DocType (NestedSet)
+│   │   ├── stock_entry/             # Transaction document
+│   │   ├── stock_entry_detail/      # Child table
+│   │   └── stock_ledger_entry/      # Immutable ledger
+│   ├── report/
+│   │   ├── stock_balance/           # Aggregated balance report
+│   │   └── stock_ledger/            # Movement history report
+│   ├── workspace/
+│   │   └── x_electronics/           # App workspace
+│   └── utils.py                     # Shared utilities
+├── hooks.py
+└── modules.txt
+```
+
+## Installation
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app [https://github.com/CHRISKINUNGI/x_electronics.git](https://github.com/CHRISKINUNGI/x_electronics.git) --branch main
-bench install-app x_electronics
+bench get-app https://github.com/CHRISKINUNGI/x_electronics.git --branch main
+bench --site your-site.localhost install-app x_electronics
+bench --site your-site.localhost migrate
 ```
 
-### Contributing
+## Development
 
-This app uses `pre-commit` for code formatting and linting. Please [install pre-commit](https://pre-commit.com/#installation) and enable it for this repository:
+This app uses `pre-commit` for code formatting and linting:
 
 ```bash
 cd apps/x_electronics
 pre-commit install
 ```
 
-Pre-commit is configured to use the following tools for checking and formatting your code:
+Tools configured: **ruff**, **eslint**, **prettier**, **pyupgrade**
 
-- ruff
-- eslint
-- prettier
-- pyupgrade
-
-### CI
-
-This app can use GitHub Actions for CI. The following workflows are configured:
-
-- CI: Installs this app and runs unit tests on every push to `develop` branch.
-- Linters: Runs [Frappe Semgrep Rules](https://github.com/frappe/semgrep-rules) and [pip-audit](https://pypi.org/project/pip-audit/) on every pull request.
-
-### License
+## License
 
 MIT
