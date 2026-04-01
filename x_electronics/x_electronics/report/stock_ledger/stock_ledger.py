@@ -1,5 +1,7 @@
 import frappe
 
+from x_electronics.x_electronics.utils import build_stock_conditions
+
 
 def execute(filters=None):
 	columns = get_columns()
@@ -26,24 +28,9 @@ def get_columns():
 
 
 def get_data(filters):
-	filters = filters or {}
-	conditions = ["docstatus = 1"]
-	values = []
+	conditions, values = build_stock_conditions(filters)
 
-	if filters.get("from_date"):
-		conditions.append("posting_date >= %s")
-		values.append(filters.get("from_date"))
-
-	if filters.get("to_date"):
-		conditions.append("posting_date <= %s")
-		values.append(filters.get("to_date"))
-
-	warehouse_filter, warehouse_values = get_warehouse_filter(filters.get("warehouse"))
-	if warehouse_filter:
-		conditions.append(warehouse_filter)
-		values.extend(warehouse_values)
-
-	sql = """
+	sql = f"""
 		SELECT
 			posting_date,
 			item,
@@ -55,30 +42,6 @@ def get_data(filters):
 		FROM `tabStock Ledger Entry`
 		WHERE {conditions}
 		ORDER BY posting_date DESC, creation DESC
-	""".format(conditions=" AND ".join(conditions))
+	"""
 
 	return frappe.db.sql(sql, values, as_dict=True)
-
-
-def get_warehouse_filter(warehouse):
-	if not warehouse:
-		return "", []
-
-	warehouse_doc = frappe.db.get_value("Warehouse", warehouse, ["is_group", "lft", "rgt"], as_dict=True)
-	if not warehouse_doc:
-		return "warehouse = %s", [warehouse]
-
-	if warehouse_doc.is_group:
-		warehouses = frappe.get_all(
-			"Warehouse",
-			filters={"lft": [">=", warehouse_doc.lft], "rgt": ["<=", warehouse_doc.rgt]},
-			pluck="name",
-		)
-	else:
-		warehouses = [warehouse]
-
-	if not warehouses:
-		return "warehouse = %s", [warehouse]
-
-	placeholders = ", ".join(["%s"] * len(warehouses))
-	return f"warehouse IN ({placeholders})", warehouses
