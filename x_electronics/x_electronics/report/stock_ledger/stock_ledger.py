@@ -22,6 +22,7 @@ def get_columns():
 		},
 		{"fieldname": "qty", "label": "Qty (In/Out)", "fieldtype": "Float", "width": 120},
 		{"fieldname": "incoming_rate", "label": "Incoming Rate", "fieldtype": "Currency", "width": 120},
+		{"fieldname": "outgoing_rate", "label": "Outgoing Rate", "fieldtype": "Currency", "width": 120},
 		{"fieldname": "valuation_rate", "label": "Valuation Rate", "fieldtype": "Currency", "width": 120},
 		{"fieldname": "balance_qty", "label": "Balance Qty", "fieldtype": "Float", "width": 120},
 	]
@@ -37,6 +38,7 @@ def get_data(filters):
 			warehouse,
 			qty,
 			incoming_rate,
+			outgoing_rate,
 			valuation_rate,
 			balance_qty
 		FROM `tabStock Ledger Entry`

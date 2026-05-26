@@ -48,10 +48,12 @@ class TestStockBalanceReport(FrappeTestCase):
 			(entry for entry in data if entry.item == self.item_code and entry.warehouse == self.warehouse),
 			None,
 		)
+		# FIFO: consume 5 takes from oldest batch (100/unit)
+		# Remaining queue: [(5, 100), (10, 200)] → value=2500, qty=15, rate=166.67
 		self.assertIsNotNone(row)
 		self.assertEqual(row.balance_qty, 15)
-		self.assertAlmostEqual(row.valuation_rate, 150)
-		self.assertAlmostEqual(row.total_value, 2250)
+		self.assertAlmostEqual(row.valuation_rate, 2500 / 15, places=2)
+		self.assertAlmostEqual(row.total_value, 2500, places=2)
 
 	def test_warehouse_hierarchy_filter(self):
 		"""Filtering by a group warehouse should include child warehouse data."""

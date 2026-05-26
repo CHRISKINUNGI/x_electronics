@@ -28,21 +28,32 @@ def get_columns():
 def get_data(filters):
 	conditions, values = build_stock_conditions(filters)
 
-	incoming_value = "SUM(CASE WHEN qty > 0 THEN qty * incoming_rate ELSE 0 END)"
-	incoming_qty = "NULLIF(SUM(CASE WHEN qty > 0 THEN qty ELSE 0 END), 0)"
-	valuation_rate = f"IFNULL({incoming_value} / {incoming_qty}, 0)"
-
-	sql = f"""
-		SELECT
-			item,
-			warehouse,
-			SUM(qty) AS balance_qty,
-			{valuation_rate} AS valuation_rate,
-			SUM(qty) * {valuation_rate} AS total_value
+	# Get balance quantities per item/warehouse.
+	rows = frappe.db.sql(
+		f"""
+		SELECT item, warehouse, SUM(qty) AS balance_qty
 		FROM `tabStock Ledger Entry`
 		WHERE {conditions}
 		GROUP BY item, warehouse
 		HAVING balance_qty > 0
-	"""
+	""",
+		values,
+		as_dict=True,
+	)
 
-	return frappe.db.sql(sql, values, as_dict=True)
+	# Valuation rate under FIFO is the rate stored on the most recent SLE —
+	# it reflects the weighted cost of whatever batches remain in the queue.
+	for row in rows:
+		latest = frappe.db.sql(
+			"""
+			SELECT valuation_rate FROM `tabStock Ledger Entry`
+			WHERE item = %s AND warehouse = %s AND docstatus = 1
+			ORDER BY posting_date DESC, creation DESC
+			LIMIT 1
+		""",
+			(row.item, row.warehouse),
+		)
+		row.valuation_rate = latest[0][0] if latest else 0
+		row.total_value = row.balance_qty * row.valuation_rate
+
+	return rows
