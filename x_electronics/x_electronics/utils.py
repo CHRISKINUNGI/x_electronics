@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import flt
 
 
 def get_row_warehouses(row):
@@ -71,3 +72,26 @@ def get_warehouse_filter(warehouse):
 
 	placeholders = ", ".join(["%s"] * len(warehouses))
 	return f"warehouse IN ({placeholders})", warehouses
+
+
+def consume_from_fifo_queue(queue, qty_needed):
+	"""Drain qty_needed from the front of the FIFO queue.
+
+	Returns (outgoing_rate, updated_queue) where outgoing_rate is the
+	weighted average cost of the consumed batches.
+	"""
+	qty_remaining_to_consume = qty_needed
+	total_cost = 0.0
+	updated_queue = [list(batch) for batch in queue]
+
+	for batch in updated_queue:
+		if qty_remaining_to_consume <= 0:
+			break
+		qty_taken_from_batch = min(batch[0], qty_remaining_to_consume)
+		total_cost += qty_taken_from_batch * batch[1]
+		batch[0] -= qty_taken_from_batch
+		qty_remaining_to_consume -= qty_taken_from_batch
+
+	updated_queue = [batch for batch in updated_queue if batch[0] > 1e-9]
+	outgoing_rate = (total_cost / qty_needed) if qty_needed else 0
+	return outgoing_rate, updated_queue

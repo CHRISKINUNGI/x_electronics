@@ -13,12 +13,14 @@
   "posting_date",
   "qty",
   "incoming_rate",
+  "outgoing_rate",
   "reference_section",
   "voucher_no",
   "valuation_section",
   "valuation_rate",
   "column_break_valuation",
   "balance_qty",
+  "fifo_queue",
   "amended_from"
  ],
  "fields": [
@@ -68,6 +70,12 @@
    "label": "Incoming Rate"
   },
   {
+   "fieldname": "outgoing_rate",
+   "fieldtype": "Currency",
+   "label": "Outgoing Rate",
+   "read_only": 1
+  },
+  {
    "fieldname": "reference_section",
    "fieldtype": "Section Break",
    "label": "Reference"
@@ -98,6 +106,13 @@
    "fieldname": "balance_qty",
    "fieldtype": "Float",
    "label": "Balance Qty",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fifo_queue",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "FIFO Queue",
    "read_only": 1
   },
   {
