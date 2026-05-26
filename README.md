@@ -1,6 +1,6 @@
 # X Electronics - Warehouse Management System
 
-A Frappe Framework application that implements a complete warehouse management system for X Electronics with hierarchical warehouse management, stateless moving average valuation, and full test coverage.
+A Frappe Framework application that implements a complete warehouse management system for X Electronics with hierarchical warehouse management, FIFO queue valuation, and full test coverage.
 
 Built as a technical assessment for **Navari Limited**.
 
@@ -37,7 +37,7 @@ Built as a technical assessment for **Navari Limited**.
 | **Warehouse** | Nested-Set tree DocType supporting Group (organisational) and Leaf (physical) warehouses. |
 | **Stock Entry** | User-facing transaction document — Receipt, Consume, or Transfer — that creates Stock Ledger Entry rows on submit. |
 | **Stock Entry Detail** | Child table for Stock Entry line items (item, quantity, rate, warehouses). |
-| **Stock Ledger Entry** | Immutable ledger row recording every stock movement with computed `balance_qty` and moving-average `valuation_rate`. |
+| **Stock Ledger Entry** | Immutable ledger row recording every stock movement with computed `balance_qty`, FIFO `outgoing_rate`, and `valuation_rate`. |
 
 ## Key Features
 
@@ -49,20 +49,23 @@ Built as a technical assessment for **Navari Limited**.
 - **Leaf Warehouses** — physical locations where stock is held (e.g., "Nairobi - Main Store")
 - **Tree-aware reports** — selecting a group warehouse automatically includes all descendants using `lft`/`rgt` bounds
 
-### 2. Stateless Moving Average Valuation
+### 2. FIFO Queue Valuation
 
-Valuation is derived entirely from the ledger — no cached running totals:
+Each `Stock Ledger Entry` carries the full FIFO queue state as a JSON snapshot — no full-history replay on every submit:
 
-- Each `Stock Ledger Entry` computes `valuation_rate` and `balance_qty` via a single aggregate SQL query against already-submitted rows
-- Row-level `SELECT ... FOR UPDATE` locks prevent concurrent submits from producing inconsistent valuations
-- The `valuation_rate` on the Item master is updated after each ledger commit
+- **Receipts** append a new `[qty, rate]` batch to the back of the queue
+- **Consumes** drain batches from the front; `outgoing_rate` is the weighted average cost of exactly the batches consumed
+- **Backdated entries** trigger a chronological repost of all subsequent entries so the queue stays consistent
+- **Cancellations** repost subsequent entries then reset `Item.valuation_rate` to the latest surviving entry
+- **Concurrent safety** — `SELECT ... FOR UPDATE` row locks prevent two simultaneous submits from reading stale queue state
+- `valuation_rate` = cost of stock still in the queue, not a historical blend
 
 **Example:**
-| Action | Balance Qty | Valuation Rate |
-|---|---|---|
-| Receive 10 @ 85,000 | 10 | 85,000.00 |
-| Receive 5 @ 87,000 | 15 | 85,666.67 |
-| Issue 3 | 12 | 85,666.67 (unchanged) |
+| Action | Queue | Balance Qty | Outgoing Rate | Valuation Rate |
+|---|---|---|---|---|
+| Receive 10 @ 800 | `[(10, 800)]` | 10 | — | 800.00 |
+| Receive 5 @ 1,000 | `[(10, 800), (5, 1000)]` | 15 | — | 866.67 |
+| Consume 12 | `[(3, 1000)]` | 3 | 833.33 | 1,000.00 |
 
 ### 3. Three Transaction Types
 
@@ -91,7 +94,7 @@ Stock Entries can be cancelled, which automatically cancels all linked Stock Led
 | Report | Description |
 |---|---|
 | **Stock Balance** | Aggregated balance snapshot per item/warehouse. Filters: `to_date`, `item`, `warehouse` (tree-aware). Shows Balance Qty, Valuation Rate, and Total Value with a totals row. |
-| **Stock Ledger** | Line-by-line movement log. Filters: `from_date`, `to_date`, `item`, `warehouse` (tree-aware). Positive quantities shown in green, negative in red. |
+| **Stock Ledger** | Line-by-line movement log. Filters: `from_date`, `to_date`, `item`, `warehouse` (tree-aware). Shows `Outgoing Rate` on consume rows as proof of FIFO costing. Positive quantities shown in green, negative in red. |
 
 Both reports use shared utilities from `utils.py` — `build_stock_conditions()` for common SQL filter logic and `get_warehouse_filter()` for tree-aware warehouse expansion.
 
@@ -121,14 +124,17 @@ $ bench --site mysite.localhost run-tests --app x_electronics
  ✔ test_non_positive_quantity_is_blocked
  ✔ test_cancel_reverses_ledger_entries
  ✔ test_full_receipt_consume_transfer_flow
- ✔ test_moving_average_and_balance
+ ✔ test_fifo_valuation_and_balance
+ ✔ test_fifo_cross_batch_consume
+ ✔ test_backdated_entry_recalculates_subsequent
+ ✔ test_cancel_recalculates_subsequent
  ✔ test_direct_negative_stock_submission_is_blocked
  ✔ test_report_returns_movement_rows
  ✔ test_date_range_filter
  ✔ test_report_calculation
  ✔ test_warehouse_hierarchy_filter
 
-Ran 15 tests in 1.0s — OK
+Ran 18 tests in 1.0s — OK
 ```
 
 | Test Class | What It Covers |
@@ -136,7 +142,7 @@ Ran 15 tests in 1.0s — OK
 | `TestItem` | Item creation and field validation |
 | `TestWarehouse` | Tree parent-child relationship |
 | `TestStockEntry` | Receipt / Consume / Transfer ledger creation; cancellation reversal; underflow rejection; invalid quantity rejection; end-to-end flow |
-| `TestStockLedgerEntry` | Moving-average calculation; running balance; negative-stock rejection |
+| `TestStockLedgerEntry` | FIFO single-batch and cross-batch valuation; backdated entry repost; cancellation repost; negative-stock rejection |
 | `TestStockBalanceReport` | Computed balance qty, valuation rate, total value; warehouse hierarchy filter |
 | `TestStockLedgerReport` | Movement rows returned; date range filter |
 
